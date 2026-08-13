@@ -1,0 +1,9 @@
+platform: android
+automation_name: UiAutomator2
+app: "resources/app/mts-optimus.apk"
+platform_version: "17"
+device_name: Pixel_10
+remote_url: http://127.0.0.1:4723
+no_reset: true
+full_reset: false
+new_command_timeout: 300

@@ -1,0 +1,41 @@
+# Сборки приложения ПЕКУТСЯ в образ: конфиг android.local.emul.yaml ссылается на
+# resources/app/mts-optimus.apk, и entrypoint не монтирует APK снаружи — без него
+# тест упадёт с "application does not exist". iOS-сборки (.ipa/.app) здесь не нужны.
+*.ipa
+*.app
+
+# Виртуальные окружения и кеши — внутри образа ставится своё.
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Результаты запусков — не нужны в образе.
+reports/
+resources/screenshots/
+allure-report/
+allure-results/
+
+# VCS и IDE.
+.git/
+.gitignore
+.gitlab-ci.yml
+.idea/
+.vscode/
+
+# Секреты.
+.env
+.env.*
+!.env.example
+
+# Документация и мета, не нужные рантайму.
+README.md
+*.md
+Dockerfile
+.dockerignore
+
+# Локальные lock-файлы других менеджеров (используем только poetry.lock).
+uv.lock

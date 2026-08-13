@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Сборки приложения — НЕ в git
+resources/app/*.apk
+resources/app/*.ipa
+resources/app/*.app
+
+# Результаты запусков
+reports/
+resources/screenshots/
+
+# Секреты
+.env
+
+# IDE
+.idea/
+.vscode/

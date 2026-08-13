@@ -1,0 +1,116 @@
+# CI для мобильных автотестов на Appium.
+#
+# Требования к self-hosted runner (shell executor) с тегом 'mobile':
+#   - Python 3.10+, Node.js, Appium (`npm i -g appium`)
+#   - Android SDK + эмулятор (avd) для ветки android
+#   - Xcode + симулятор для ветки ios (только macOS-runner)
+#   - Драйверы: `appium driver install uiautomator2` / `xcuitest`
+#
+# Матрица android × ios запускается параллельно.
+# BrowserStack и облака не используются — только локальные эмуляторы на runner.
+
+stages:
+  - build
+  - test
+  - report
+
+variables:
+  PYTHONDONTWRITEBYTECODE: "1"
+  ALLURE_RESULTS: "reports/allure-results"
+  # Образ Android-тестов: собирается в джобе build:image и пушится в реестр.
+  ANDROID_IMAGE: $CI_REGISTRY_IMAGE/appium-android:latest
+
+# --- Сборка Docker-образа для Android-тестов -------------------------------
+# Пушится в GitLab Container Registry. Запускается только при изменении
+# Dockerfile / pyproject.toml / poetry.lock.
+build:image:
+  stage: build
+  image: docker:24
+  services:
+    - docker:24-dind
+  tags: [docker]
+  rules:
+    - changes:
+        - Dockerfile
+        - pyproject.toml
+        - poetry.lock
+        - scripts/ci-android-entrypoint.sh
+  before_script:
+    - echo "$CI_REGISTRY_PASSWORD" | docker login "$CI_REGISTRY" -u "$CI_REGISTRY_USER" --password-stdin
+  script:
+    - docker build -t "$ANDROID_IMAGE" .
+    - docker push "$ANDROID_IMAGE"
+  after_script:
+    - docker logout "$CI_REGISTRY"
+
+# iOS-джоба работает на нативной macOS (shell executor) — Docker для iOS не подходит
+# (XCUITest требует macOS + Xcode, доступа к симулятору из контейнера нет).
+.setup_ios: &setup_ios
+  before_script:
+    - poetry install --no-root --without dev
+  cache:
+    key:
+      files:
+        - poetry.lock
+    paths:
+      - .venv/
+
+# --- Android ---
+# Самодостаточный Docker-контейнер: эмулятор (headless) + Appium + тесты
+# поднимаются внутри образа (scripts/ci-android-entrypoint.sh). Runner'у нужен
+# только docker executor. Для ускорения пробросьте /dev/kvm (runtime: kvm),
+# иначе эмулятор идёт в software-режиме (медленнее, но работает).
+test:android:
+  stage: test
+  image: "$ANDROID_IMAGE"
+  tags: [mobile-android]
+  needs: ["build:image"]
+  # Чтобы получить KVM-ускорение, runner должен пробрасывать /dev/kvm.
+  # Без этого эмулятор падает на software-режим.
+  variables:
+    KVM: "true"
+  script:
+    - bash scripts/ci-android-entrypoint.sh
+  artifacts:
+    when: always
+    paths:
+      - ${ALLURE_RESULTS}
+      - reports/screenshots/
+      - reports/appium.log
+      - reports/emulator.log
+    expire_in: 7 days
+
+# --- iOS (только на macOS-runner) ---
+test:ios:
+  stage: test
+  tags: [mobile-ios-mac]
+  <<: *setup_ios
+  script:
+    - appium --use-plugins=images --allow-cors >/tmp/appium.log 2>&1 &
+    - sleep 5
+    # Запуск симулятора и установка .ipa/.app выполняются на runner'е заранее
+    - xcrun simctl list devices booted
+    - APP_CONFIG=ios.local pytest -m "ios" -n auto --reruns 2
+  after_script:
+    - pkill -f appium || true
+  artifacts:
+    when: always
+    paths:
+      - ${ALLURE_RESULTS}
+      - reports/screenshots/
+    expire_in: 7 days
+
+# --- Allure-отчёт ---
+allure:report:
+  stage: report
+  image: frankescobar/allure-docker-service:latest
+  needs:
+    - test:android
+    - test:ios
+  script:
+    - allure generate ${ALLURE_RESULTS} -o reports/allure-report --clean
+  artifacts:
+    when: always
+    paths:
+      - reports/allure-report
+    expire_in: 30 days
