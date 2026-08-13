@@ -22,7 +22,7 @@ scripts/         — entrypoint для Docker (ci-android-entrypoint.sh)
 
 ## Требования
 
-1. Appium-сервер: `npm install -g appium` (Appium 2.x)
+1. Appium-сервер: `npm install -g appium` (Appium 3.x, в образе/локально зафиксировано `3.6.0`)
 2. Драйверы: `appium driver install uiautomator2` (Android), `appium driver install xcuitest` (iOS)
 3. Эмулятор/устройство запущено, `adb devices` видит устройство
 4. Сборка приложения в `resources/app/` — сейчас `mts-optimus.apk` (МТС Optimus, `ru.mts.mvats`)
@@ -131,7 +131,7 @@ poetry run allure serve reports/allure-results
 
 ## Docker (самодостаточный Android-контейнер)
 
-`Dockerfile` собирает образ с Android SDK, headless-эмулятором (готовый AVD `ci_emulator`), Appium 2 + UiAutomator2 и Poetry-зависимостями. Эмулятор поднимается **внутри контейнера** — runner'у не нужен хост-эмулятор, только docker executor.
+`Dockerfile` собирает образ с Android SDK, headless-эмулятором (готовый AVD `ci_emulator`), Appium 3.6.0 + UiAutomator2 3.10.0 и Poetry-зависимостями. Эмулятор поднимается **внутри контейнера** — runner'у не нужен хост-эмулятор, только docker executor. APK из `resources/app/` печётся в образ (`.dockerignore` больше его не исключает), поэтому отдельный volume для приложения не нужен.
 
 ### Сборка образа
 
@@ -167,11 +167,13 @@ bash scripts/ci-android-entrypoint.sh   # полный прогон: эмуля�
 3. ждёт `sys.boot_completed` (до 90 × 2 с), при таймауте печатает хвост `emulator.log` и падает;
 4. разблокирует экран (`keyevent 82`);
 5. поднимает Appium на `:4723`, ждёт `/status`;
-6. гонит `pytest -m android -n auto --reruns 2`;
+6. гонит `pytest -m android -n auto --reruns 2` с `APP_CONFIG=android.local.emul` (задан в Dockerfile);
 7. гасит Appium и эмулятор, прокидывает код возврата.
 
 ### Нюансы
 
+- **`avdmanager` не на PATH базового образа** — `Dockerfile` добавляет `cmdline-tools/latest/bin` в `PATH` и доустанавливает `cmdline-tools;latest` через `sdkmanager`. Если при сборке падает `avdmanager: command not found` — проверьте этот шаг.
+- **APK печётся в образ.** Конфиг `android.local.emul.yaml` ссылается на `resources/app/mts-optimus.apk`, поэтому `.dockerignore` больше не исключает `resources/app/` и `*.apk`. Для другого приложения замените APK и при необходимости `app_package`/`APP_CONFIG`.
 - **KVM критичен для скорости.** На Linux-runner'е пробросьте `/dev/kvm` (`devices = ["/dev/kvm"]` в config.toml GitLab-runner или `privileged: true`). Без него тесты идут в 5–10× медленнее.
 - **ARM-хост** (Apple Silicon): замените `ANDROID_ABI=x86_64` → `arm64-v8a` в `Dockerfile`.
 - Образ тяжёлый (~3–4 ГБ из-за системного образа Android) — собирайте редко (уже обеспечено `rules: changes`) и храните в Registry.
