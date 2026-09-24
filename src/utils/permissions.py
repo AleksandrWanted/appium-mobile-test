@@ -1,12 +1,15 @@
 """Обработка системных диалогов: разрешения, нативные alert, выбор APK.
 
+Два уровня:
+- грант без UI: auto_grant_runtime_permissions() выдаёт все RUNTIME-разрешения
+  через `mobile: changePermissions` (Android) — диалоги вообще не появляются;
+- закрытие UI: grant_permissions() тапает кнопки «Разрешить»/Allow у уже
+  показанных диалогов (запасной путь, медленный).
+
 Стратегии отличаются по платформам:
-- Android: разрешения — кнопки «Разрешить» по тексту/ресурс-id,
+- Android: разрешения — `pm grant` или кнопки «Разрешить» по тексту,
   системные alert — через driver.switch_to.alert.
 - iOS: нативные alert — driver.switch_to.alert (accept/dismiss).
-
-Универсальный grant_permissions() пытается закрыть все всплывающие
-системные окна, не падая, если их нет.
 """
 from __future__ import annotations
 
@@ -25,11 +28,42 @@ ALLOW_TEXTS = (
 WHILE_USING_TEXTS = ("While using the app", "Только во время использования")
 
 
+def auto_grant_runtime_permissions(driver, package: str | None = None) -> bool:
+    """Выдать приложению все RUNTIME-разрешения через Appium (pm grant).
+
+    Использует мобильное расширение UiAutomator2 `mobile: changePermissions`
+    с командным словом 'all' — Appium запрашивает manifest пакета и выдаёт
+    каждое запрошенное разрешение командой `pm grant`. Работает даже когда
+    приложение уже установлено и no_reset: true (в отличие от capability
+    autoGrantPermissions, которая срабатывает только при установке APK или
+    pm clear).
+
+    Возвращает True, если грант выполнен (или нечего выдавать), False при
+    ошибке расширения (не та платформа/драйвер). Не бросает исключений —
+    используется на сессии-fixtурах, где падение хуже, чем отсутствие прав.
+    """
+    try:
+        args: dict = {"permissions": "all", "action": "grant", "type": "pm"}
+        if package:
+            args["appPackage"] = package
+        driver.execute_script("mobile: changePermissions", args)
+        log.info("RUNTIME-разрешения выданы через mobile: changePermissions")
+        return True
+    except Exception as exc:  # noqa: BLE001
+        log.warning("mobile: changePermissions недоступен: %s", exc)
+        return False
+
+
 class PermissionsHandler:
     """Закрывает системные диалоги (разрешения, alert, APK-installer)."""
 
     def __init__(self, driver):
         self.driver = driver
+
+    # --- грант без UI (Android) ---
+    def grant_runtime_permissions(self, package: str | None = None) -> bool:
+        """Выдать все RUNTIME-разрешения без UI. См. auto_grant_runtime_permissions."""
+        return auto_grant_runtime_permissions(self.driver, package)
 
     # --- нативные alert (iOS + часть Android) ---
     def accept_alert(self) -> bool:

@@ -1,6 +1,5 @@
 platform: android
-automation_name: UiAutomator2
-app: "resources/app/mts-optimus.apk"
+app: "resources/app/app-google-release-v2.15.0.apk"
 platform_version: "15"
 device_name: sm-s21fe
 udid: R5CT21KZN7E
@@ -8,3 +7,6 @@ remote_url: http://127.0.0.1:4723
 no_reset: true
 full_reset: false
 new_command_timeout: 300
+auto_grant_permissions: true
+server_session_override: false
+server_log_level: info

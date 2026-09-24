@@ -89,7 +89,7 @@ adb wait-for-device shell 'while [[ -z $(getprop sys.boot_completed) ]]; do slee
 adb devices
 ```
 
-В `config/android.local.emul.yaml` указано `device_name: Pixel_10`. Имя AVD должно с ним совпадать.
+В `configs/android.local.emul.yaml` указано `device_name: Pixel_10`. Имя AVD должно с ним совпадать.
 
 ### 5.2. Реальное устройство
 
@@ -111,20 +111,19 @@ adb devices
 
 ## 6. Конфигурация (APP_CONFIG)
 
-Конфиг — это YAML-файл в `config/`. Имя файла **без расширения** передаётся через
+Конфиг — это YAML-файл в `configs/`. Имя файла **без расширения** передаётся через
 переменную окружения `APP_CONFIG` (или `.env`).
 
 | `APP_CONFIG` | Файл | Назначение |
 |---|---|---|
-| `android.local.emul` | `config/android.local.emul.yaml` | Локальный эмулятор Pixel_10 |
-| `android.local.real` | `config/android.local.real.yaml` | Реальное устройство (UDID `R5CT21KZN7E`) |
-| `ios.local` | `config/ios.local.yaml` | iOS-симулятор (требуется macOS + Xcode) |
+| `android.local.emul` | `configs/android.local.emul.yaml` | Локальный эмулятор Pixel_10 |
+| `android.local.real` | `configs/android.local.real.yaml` | Реальное устройство (UDID `R5CT21KZN7E`) |
+| `ios.local` | `configs/ios.local.yaml` | iOS-симулятор (требуется macOS + Xcode) |
 
 ### Пример конфига реального устройства
 
 ```yaml
 platform: android
-automation_name: UiAutomator2
 app: "resources/app/mts-optimus.apk"
 platform_version: "15"
 device_name: R5CT21KZN7E
@@ -133,8 +132,17 @@ remote_url: http://127.0.0.1:4723
 no_reset: true
 full_reset: false
 new_command_timeout: 300
-handle_permissions: false   # включать только если приложение реально показывает permission-диалоги
+auto_grant_permissions: true    # Appium выдаёт RUNTIME-разрешения сам, без диалогов
+server_session_override: false  # эквивалент `appium server --session-override`
+server_log_level: info          # debug — для разбора падений сервера
 ```
+
+### Поля `server_*`
+
+Действуют только на сервер, который фикстура подняла **сама** (когда на `remote_url` ничего не отвечает). На внешний сервер не влияют.
+
+- `server_session_override: true` — эквивалент CLI-флага `--session-override`: при новом createSession закрывать зависшую сессию того же клиента (лечит ошибки проксирования после прерванного прогона).
+- `server_log_level:` — `info` | `debug` | `warn` | `error`. Логи пишутся в `reports/appium_server.log`; `debug` нужен при разборе проблем запуска сервера.
 
 ### Смена конфига
 
@@ -146,13 +154,17 @@ APP_CONFIG=android.local.real poetry run pytest tests/smoke/test_app_launch.py -
 echo 'APP_CONFIG=android.local.real' > .env
 ```
 
-### Поле `handle_permissions`
+### Поле `auto_grant_permissions`
 
-- `false` (по умолчанию) — системные permission-диалоги **не** закрываются.
-  Используй для приложений, которые не показывают диалоги при старте (МТС Optimus).
-  Без этого флага тест проходил за **9 с** вместо ~56 с.
-- `true` — `PermissionsHandler.grant_permissions()` закроет диалоги «Разрешить/Allow».
-  Включай **только** для приложений, реально их показывающих.
+- `true` (по умолчанию во всех профилях) — системные permission-диалоги
+  («Разрешить отправку уведомлений?», геолокация и т.д.) **не появляются**:
+  Android — Appium выдаёт разрешения через `pm grant` (capability
+  `autoGrantPermissions` при установке + прямой `mobile: changePermissions`
+  в фикстуре, когда приложение уже установлено); iOS — WDA тапает «Allow»
+  на нативных alert (`autoAcceptAlerts`).
+- `false` — отключить, только если тест сам проверяет permission-диалог как UI;
+  показавшийся диалог тогда закрывается явным вызовом
+  `pages.common.grant_permissions()`.
 
 ---
 
@@ -275,8 +287,8 @@ open reports/allure-report/index.html
 | `The application at '...' does not exist or is not accessible` | В пути к APK есть пробелы/скобки. Переименуй файл (текущий: `mts-optimus.apk`) и проверь `app:` в конфиге. |
 | `device unauthorized` | Подтверди диалог USB-отладки на телефоне; `adb kill-server && adb start_server`. |
 | Appium создаёт сессию на эмуляторе вместо телефона | В конфиге реального устройства должен быть `udid: R5CT21KZN7E`. |
-| Тест идёт ~50–60 с вместо ~9 с | В конфиге стоит `handle_permissions: true`, а приложение не показывает диалогов. Поставь `false`. |
 | На эмуляторе сплэш закрывается, UI не выходит в фон | Норма: МТС Optimus использует Google Play Integrity, который не проходит на эмуляторе. Тест проверяет «процесс жив» через `queryAppState`. На реальном устройстве Integrity проходит — UI виден полностью. |
+| Тест висит на системном permission-диалоге | Проверь, что в профиле `auto_grant_permissions: true` (по умолчанию включено). Если тест сам проверяет диалог — закрой его явным `pages.common.grant_permissions()`. |
 | `Potentially insecure feature 'adb_shell' has not been enabled` | Проект не использует `mobile: shell`. Если встретил — это где-то лишний вызов; используй `mobile: queryAppState` / `mobile: terminateApp` вместо `adb shell`. |
 | Сессия падает по таймауту простоя | Подними `new_command_timeout` в конфиге (по умолчанию 300 с). |
 | `aapt2: command not found` | Установи build-tools и добавь в `PATH`, либо используй `aapt` из `platform-tools`. |

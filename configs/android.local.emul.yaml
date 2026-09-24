@@ -1,0 +1,11 @@
+platform: android
+app: "resources/app/app-google-release-v2.15.0.apk"
+platform_version: "17"
+device_name: Pixel_10_pro
+remote_url: http://127.0.0.1:4723
+no_reset: true
+full_reset: false
+new_command_timeout: 300
+auto_grant_permissions: true
+server_session_override: false
+server_log_level: info

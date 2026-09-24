@@ -1,5 +1,4 @@
 platform: ios
-automation_name: XCUITest
 app: resources/app/app.ipa
 platform_version: "17.0"
 device_name: iPhone 15
@@ -7,3 +6,6 @@ remote_url: http://127.0.0.1:4723
 no_reset: true
 full_reset: false
 new_command_timeout: 300
+auto_grant_permissions: true
+server_session_override: false
+server_log_level: info

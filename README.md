@@ -5,10 +5,11 @@
 ## Структура
 
 ```
-config/          — YAML-конфиги окружений (android.local.emul, android.local.real, ios.local)
+config/          — python-модуль загрузки конфига (config.py)
+configs/         — YAML-конфиги окружений (android.local.emul, android.local.real, ios.local)
 docs/            — RUN.md: подробное руководство по запуску тестов
 src/driver/      — фабрика драйвера, обёртка с ожиданиями и скриншотами
-src/pages/       — Page Object Pattern (BasePage, LoginPage, HomePage)
+src/pages/       — Page Object Pattern: фасад Pages, PageContext, common-элементы, экраны
 src/utils/       — хелперы и обработка системных диалогов (permissions.py)
 tests/           — только тесты; conftest.py с фикстурами driver/test_data
 resources/app/   — сборки приложений (mts-optimus.apk)
@@ -51,9 +52,15 @@ poetry shell
 poetry run appium   # в отдельном терминале, поднимается на http://127.0.0.1:4723
 ```
 
+**Appium можно не запускать вручную**: session-фикстура `appium_server` (conftest.py)
+проверяет `/status` сервера и при недоступности сама поднимает процесс `appium server`
+(лог — `reports/appium_server.log`), останавливая его после сессии. Уже работающий
+внешний сервер (ручной запуск, CI-entrypoint) не трогается. Ручной запуск остаётся
+удобным для отладки — сервер переживает перезапуски pytest.
+
 ## Запуск тестов
 
-Конфиг выбирается переменной окружения `APP_CONFIG` (имя файла из `config/` без `.yaml`).
+Конфиг выбирается переменной окружения `APP_CONFIG` (имя файла из `configs/` без `.yaml`).
 Доступные конфиги: `android.local.emul` (эмулятор Pixel_10), `android.local.real`
 (реальное устройство, UDID `R5CT21KZN7E`), `ios.local` (симулятор).
 
@@ -89,7 +96,29 @@ poetry run allure serve reports/allure-results
 
 ## Обработка системных диалогов
 
-`src/utils/permissions.py` — `PermissionsHandler` закрывает всплывающие permission-диалоги:
+### Основной механизм: `auto_grant_permissions: true` (включён во всех профилях)
+
+Системные permission-диалоги (например, «Разрешить отправку уведомлений?» при
+первом запуске) предотвращаются, а не закрываются: разрешения выдаются до того,
+как приложение их запросит.
+
+- **Android** — двойной механизм:
+  - capability `autoGrantPermissions` — Appium сам делает `pm grant` при установке
+    APK (first launch, `full_reset: true`);
+  - фикстура `driver` дополняет грантом через `mobile: changePermissions` (`all`)
+    — покрывает случай `no_reset: true` с уже установленным приложением, когда
+    установка не происходит и capability пропускается.
+- **iOS** — capability `autoAcceptAlerts` в `factory.py`: WebDriverAgent
+  авто-тапает «Разрешить»/«Allow» на любом нативном alert.
+
+Один флаг в конфиге, ноль задержек, работает и для first-launch, и для
+переустановки APK, и для «приложение уже стоит, данные сохранены».
+
+### Явное закрытие показанного диалога: `pages.common.grant_permissions()`
+
+Тесту, который проверяет permission-диалог как UI (например, запущенному с
+`APPIUM_AUTO_GRANT_PERMISSIONS=false`), показавшийся диалог нужно закрыть руками:
+`pages.common.grant_permissions()`. Под капотом — `src/utils/permissions.py`:
 
 - нативные alert — через `driver.switch_to.alert`;
 - кнопки «Разрешить»/«Allow» — по тексту через UiAutomator + accessibility id;
@@ -97,7 +126,9 @@ poetry run allure serve reports/allure-results
 - `grant_permissions()` — цикл для идущих подряд диалогов (камера → геолокация → уведомления);
 - `dismiss_apk_installer()` — системный установщик APK (Install/Установить/Done/Готово).
 
-Вызывается автоматически в фикстуре `driver` после старта приложения — **но только если в конфиге `handle_permissions: true`**. По умолчанию флаг `False`: для приложений, которые не показывают диалогов при старте (МТС Optimus), это экономит ~50 с на каждом запуске (поиск несуществующих кнопок «Разрешить»).
+Конфиг-флаг `handle_permissions` удалён: он автоматически тапал кнопки при
+каждом старте сессии, что медленно (~50 c на пустой экран) и не нужно при
+работающем авто-гранте.
 
 ### Закрытие приложения после теста
 
@@ -181,10 +212,13 @@ bash scripts/ci-android-entrypoint.sh   # полный прогон: эмуля�
 
 ## Особенности
 
-- **Page Object Pattern** — тесты не трогают driver напрямую.
+- **Page Object Pattern** — тесты не трогают driver напрямую; через фасад `Pages` доступны
+  все экраны (`pages.login`, `pages.home`, `pages.profile`) и common-действия (`pages.common`).
+  Добавление нового экрана: класс `XxxLocators` + класс страницы, унаследованный от `BasePage`,
+  и одна строка регистрации в `Pages._build_pages()`.
 - **Explicit Waits** — никаких `sleep()`; только `WebDriverWait`.
 - **Конфиг через pydantic** — валидация на старте, переключение окружения переменной `APP_CONFIG`.
-- **`handle_permissions` флаг** — опциональное закрытие permission-диалогов (по умолчанию выключено ради скорости).
+- **`auto_grant_permissions` флаг** — авто-выдача разрешений Appium-ом (Android `pm grant` / iOS WDA->alerts), диалоги не появляются; показанный в тесте диалог закрывается явным `pages.common.grant_permissions()`.
 - **Автозакрытие приложения** после каждого теста (autouse-фикстура + `mobile: terminateApp`).
 - **Скриншоты при падении** — автоматом через хук `pytest_runtest_makereport`.
 - **Идемпотентность** — каждый тест сам поднимает своё состояние.
@@ -197,6 +231,26 @@ bash scripts/ci-android-entrypoint.sh   # полный прогон: эмуля�
 | `tests/smoke/test_app_launch.py` | `test_app_is_running` | `android`, `smoke` |
 | `tests/login/test_login.py` | `test_login_success`, `test_login_invalid_credentials` | `android` |
 | `tests/home/test_home.py` | `test_home_title_displayed` | `android` |
+
+## Page Objects (src/pages/)
+
+Архитектура повторяет подход web-проекта (`control-tests`), адаптированный под Appium:
+
+```
+Pages (фасад) ──> PageContext (driver + config + таймауты + common)
+                    ├── CommonElements  — системные диалоги, back, клавиатура
+                    ├── LoginPage       ──> BasePage (ctx)
+                    ├── HomePage        ──> BasePage (ctx)
+                    └── ProfilePage     ──> BasePage (ctx)
+```
+
+- `PageContext` — единая точка доступа page objects к driver/config/таймаутам (аналог `UIContext`);
+- `Pages` — фасад: страницы как атрибуты, сборка в `_build_pages()`, зависимости страниц через конструктор;
+- `CommonElements` — кросс-экранные действия (permission-диалоги, `press_back`, `hide_keyboard`);
+- `BasePage` принимает `PageContext`, а не driver: страницы получают общий таймаут и `common` автоматически.
+
+Фикстуры conftest: `pages` — фасад над живым driver; `login_page` — экран логина;
+`logged_in` — предусловие «пользователь залогинен», возвращает `Pages`.
 
 > `test_login_*` и `test_home_*` — условные примеры под шаблонное приложение и могут
 > требовать актуальных локаторов/данных. Дымовой тест `test_app_is_running` полностью
