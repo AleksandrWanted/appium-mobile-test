@@ -1,10 +1,10 @@
 platform: android
-app: "resources/app/app-google-release-v2.15.0.apk"
+app: "resources/app/app-google-release_v2.17.1.apk"
 platform_version: "15"
 device_name: sm-s21fe
 udid: R5CT21KZN7E
 remote_url: http://127.0.0.1:4723
-no_reset: true
+no_reset: false
 full_reset: false
 new_command_timeout: 300
 auto_grant_permissions: true

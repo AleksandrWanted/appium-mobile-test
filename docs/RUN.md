@@ -129,7 +129,7 @@ platform_version: "15"
 device_name: R5CT21KZN7E
 udid: R5CT21KZN7E          # гарантирует, что Appium выберет телефон, а не эмулятор
 remote_url: http://127.0.0.1:4723
-no_reset: true
+no_reset: false                # pm clear на каждую сессию: тест стартует с чистого приложения
 full_reset: false
 new_command_timeout: 300
 auto_grant_permissions: true    # Appium выдаёт RUNTIME-разрешения сам, без диалогов
@@ -165,6 +165,25 @@ echo 'APP_CONFIG=android.local.real' > .env
 - `false` — отключить, только если тест сам проверяет permission-диалог как UI;
   показавшийся диалог тогда закрывается явным вызовом
   `pages.common.grant_permissions()`.
+
+---
+
+## 6.1. Учётные данные для авторизации
+
+Фикстура `credentials` загружается для всех тестов: значения читаются из
+переменных окружения **MSISDN** и **VERIFICATION_CODE** — задайте их в `.env`
+(файл в git не попадает):
+
+```bash
+echo 'MSISDN=79001234567' >> .env
+echo 'VERIFICATION_CODE=1234' >> .env
+```
+
+Фикстура доступна тесту как аргумент `credentials` и внутри page objects как
+`ctx.credentials`. Если переменные не заданы, фикстура возвращает `None` —
+какие тесты это волнует, решает сам тест: авторизационные сцены проверяют
+`credentials is None` (и падают с понятной ошибкой вместо позднего
+`NoSuchElement` на экране логина), остальные их просто не трогают.
 
 ---
 

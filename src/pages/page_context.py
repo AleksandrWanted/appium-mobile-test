@@ -4,6 +4,7 @@ from __future__ import annotations
 import logging
 
 from config.config import AppConfig
+from config.credentials import Credentials
 from src.driver.driver_wrapper import DriverWrapper
 from src.pages.common_elements import CommonElements
 
@@ -20,9 +21,11 @@ class PageContext:
     берут из него driver, таймауты и общий (common) набор элементов.
     """
 
-    def __init__(self, driver: DriverWrapper, config: AppConfig):
+    def __init__(self, driver: DriverWrapper, config: AppConfig,
+                 credentials: Credentials | None = None):
         self.driver = driver
         self.config = config
+        self.credentials = credentials
         self.timeout = DEFAULT_TIMEOUT_S
         self.logger = logging.getLogger("src.pages.context")
         self.common = CommonElements(self)

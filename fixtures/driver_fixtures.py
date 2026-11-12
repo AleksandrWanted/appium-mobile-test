@@ -1,105 +1,136 @@
 """Фикстуры Appium-драйвера и Page Objects."""
 from __future__ import annotations
 
+import time
+
 import allure
 import pytest
 
 from config.config import AppConfig
+from config.credentials import Credentials
 from fixtures.appium_server_fixtures import appium_server  # noqa: F401 — фикстура driver
 from fixtures.config_fixtures import app_config  # noqa: F401 — зависимость фикстур driver/pages
+from fixtures.config_fixtures import credentials  # noqa: F401 — реэкспорт фикстуры
 from src.driver.driver_wrapper import DriverWrapper
 from src.driver.factory import create_driver
 from src.pages.pages import Pages
 from src.utils.permissions import auto_grant_runtime_permissions
 
 
-@pytest.fixture(scope="session")
+def _wait_foreground(raw_driver, package: str, timeout: int = 20) -> bool:
+    """Ждёт, пока приложение (package) реально окажется на переднем плане.
+
+    Сессия Appium отдаёт управление раньше, чем приложение выходит на
+    передний план (особенно на холодном старте) — тест начинает искать
+    элементы, а на экране ещё лаунчер. Возвращает True, когда приложение
+    в форграунде, False если так и не вышло.
+    """
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        try:
+            current = raw_driver.execute_script("mobile: getCurrentPackage")
+        except Exception:  # noqa: BLE001
+            current = None
+        if current == package:
+            return True
+        try:
+            raw_driver.execute_script("mobile: activateApp", {"appId": package})
+        except Exception:  # noqa: BLE001
+            pass
+        time.sleep(0.5)
+    return False
+
+
+@pytest.fixture
 def driver(appium_server, app_config: AppConfig) -> DriverWrapper:
-    """Создаёт и держит Appium-драйвер на всю сессию.
+    """Создаёт Appium-сессию на каждый тест.
 
-    Зависит от appium_server: если сервер не был запущен — фикстура поднимет его
-    до создания driver'а.
+    Сессия на тест, а не на прогон, вместе с no_reset: false в YAML-профиле
+    даёт каждому тесту гарантированно чистое состояние приложения: создание
+    сессии делает uninstall+install APK (full_reset) или pm clear (no_reset:
+    false), сбрасывая и авторизацию, и SSO-состояние, и системные диалоги
+    first-launch. Разные тесты не влияют друг на друга — включая сценарии
+    с авторизацией (fixture authorized_app) и её teardown'ом.
 
-    Для параллельных запусков (pytest-xdist) замени scope на 'function'
-    или используй отдельный udid/порт на воркер.
+    Для ускорения прогона можно включить session-режим: поставьте scope=
+    "session" В ЭТОЙ фикстуре и no_reset: true в YAML — тогда состояние
+    переживает тесты (быстрее, но тесты зависят друг от друга).
+
+    Зависит от appium_server: если сервер не был запущен — фикстура поднимет
+    его до создания driver'а.
     """
     raw_driver = create_driver(app_config)
     wrapper = DriverWrapper(raw_driver)
 
     if app_config.auto_grant_permissions and app_config.platform == "android":
-        # Держать приложение без системных permission-диалогов (например,
-        # «Разрешить отправку уведомлений?» при первом запуске). capability
-        # autoGrantPermissions срабатывает только при установке APK или
-        # pm clear; при no_reset: true и уже установленном приложении она
-        # пропускается — поэтому дополняем прямым грантом через
-        # mobile: changePermissions. iOS обрабатывает alerts сама
-        # (autoAcceptAlerts в capabilities, см. factory.py).
+        # После pm clear все RUNTIME-разрешения сброшены: держать приложение
+        # без системных permission-диалогов (например, «Разрешить отправку
+        # уведомлений?» на первом запуске). capability autoGrantPermissions
+        # срабатывает при установке APK/pm clear — дополняем прямым грантом
+        # через mobile: changePermissions (iOS обрабатывает alerts сама,
+        # см. factory.py).
         auto_grant_runtime_permissions(raw_driver)
+
+    # pm clear-старт: убедиться, что приложение реально в форграунде, прежде
+    # чем тест начнёт искать элементы (см. _wait_foreground).
+    package = raw_driver.capabilities.get("appPackage")
+    if package:
+        _wait_foreground(raw_driver, package)
 
     yield wrapper
     raw_driver.quit()
 
 
 @pytest.fixture
-def pages(driver: DriverWrapper, app_config: AppConfig):
-    """Инициализирует фасад Page Objects над живым driver."""
+def pages(driver: DriverWrapper, app_config: AppConfig, credentials: Credentials | None):
+    """Инициализирует фасад Page Objects над живым driver.
+
+    credentials приходит как None, когда переменные MSISDN/VERIFICATION_CODE
+    не заданы: неавторизованные тесты работают без них, авторизационные
+    сами решают, использовать их или нет (ctx.credentials).
+    """
     with allure.step("Инициализировать Page Objects"):
-        return Pages(driver=driver, config=app_config)
+        return Pages(driver=driver, config=app_config, credentials=credentials)
 
 
-@pytest.fixture(scope="session")
-def _first_app_test_done() -> dict:
-    """Сессионный флаг: прошёл ли уже первый тест на свежезапущенном приложении.
+@pytest.fixture
+def authorized_app(pages):
+    """Авторизует пользователя в приложении (fixture-pages поверх чистого старта).
 
-    Appium запускает приложение при старте сессии (autoLaunch), поэтому перед
-    первым тестом terminate+activate не нужны — это был бы второй подряд старт.
-    Флаг выставляется в teardown первого теста; всё, что до него, работает на
-    чистом старте от Appium, а каждый следующий тест получает честный рестарт.
+    Порядок (реальный сценарий входа MTS ID, SSO bottom sheet на вкладке
+    «Профиль»):
+        вкладка «Профиль» → кнопка «Войти в МТС Optimus» → (fast-track
+        «Рады видеть вас снова» → «Войти с другим номером») → ввод MSISDN →
+        «ДАЛЕЕ» → экран «Введите код из СМС» → ввод VERIFICATION_CODE →
+        вход выполняется автоматически после последней цифры.
+
+    Номер и код берутся из фикстуры credentials (переменные MSISDN /
+    VERIFICATION_CODE из .env). Если они не заданы — тест падает сразу
+    с понятной ошибкой, а не с поздним NoSuchElement на экране логина.
+
+    Возвращает Pages — тест продолжает работать с pages.profile уже в
+    авторизованном состоянии.
+
+    Teardown-логаут НЕ нужен: driver function-scoped + no_reset: false —
+    следующая сессия стартует с pm clear, и состояние «вышел из профиля»
+    обеспечено сбросом данных, а не UI-выходом.
     """
-    return {"done": False}
+    from src.pages.login_page import LoginPage
 
+    if pages.ctx.credentials is None:
+        pytest.fail(
+            "Тест требует авторизации, но учётные данные не заданы: добавьте "
+            "MSISDN и VERIFICATION_CODE в .env — см. .env.example")
 
-@pytest.fixture(autouse=True)
-def _restart_app_per_test(driver: DriverWrapper, _first_app_test_done: dict):
-    """Гарантирует чистый UI-старт приложения для каждого теста.
+    with allure.step("Авторизоваться в МТС Optimus через MTS ID"):
+        login: LoginPage = pages.common.open_login_screen()
+        # login_with_credentials сам ждёт открытие и загрузку формы —
+        # не дублируем ожидания здесь (иначе они выполнялись бы дважды).
+        login.login_with_credentials(
+            msisdn=pages.ctx.credentials.msisdn,
+            code=pages.ctx.credentials.verification_code,
+        )
+        assert login.wait_login_completed(), (
+            "Вход не завершился: аватар профиля не появился")
 
-    Appium-сессия одна на весь запуск (session-scoped driver), поэтому
-    состояние между тестами приходится приведённым ниже циклом:
-
-    - до теста: terminateApp (убить, если остался жив после прошлого теста)
-      + activateApp (запустить заново) — без этого после terminateApp прошлого
-      теста приложение мертво и следующий тест падает на поиске элементов
-      (Appium не перезапускает приложение внутри живой сессии);
-    - после теста: terminateApp — процесс не висит в фоне.
-
-    terminateApp/activateApp не трогают данные приложения (shared prefs,
-    файлы) — логин и пр. сохраняются между тестами (no_reset: true). Срабатывает
-    только если сессия ещё жива — иначе тихо пропускает.
-
-    Перед первым тестом сессии рестарт пропускается (см. _first_app_test_done),
-    но teardown-терминация выполняется всегда.
-    """
-    raw = driver.raw
-    package = raw.capabilities.get("appPackage")
-
-    def _mobile(script: str):
-        raw.execute_script(script, {"appId": package})
-
-    def restart():
-        if not package:
-            return
-        try:
-            _mobile("mobile: terminateApp")
-            _mobile("mobile: activateApp")
-        except Exception as exc:  # noqa: BLE001
-            print(f"\n[не удалось перезапустить приложение] {exc}")
-
-    if _first_app_test_done["done"]:
-        restart()
-    yield
-    try:
-        if package:
-            _mobile("mobile: terminateApp")
-    except Exception as exc:  # noqa: BLE001
-        print(f"\n[не удалось закрыть приложение] {exc}")
-    _first_app_test_done["done"] = True
+    yield pages

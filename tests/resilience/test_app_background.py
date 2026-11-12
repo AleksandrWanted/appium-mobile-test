@@ -69,7 +69,7 @@ class TestAppBackground:
         """Свернуть и развернуть приложение -> процесс жив, потом фон, потом foreground."""
         raw = driver.raw
         # Пакет берём из capabilities сессии — Appium определил его из APK
-        # (тот же источник, что в test_app_launch и _restart_app_per_test).
+        # (тот же источник, что в test_app_launch и fixture driver).
         package = raw.capabilities.get("appPackage")
 
         with allure.step(f"Дождаться прохождения сплэша (до {SPLASH_WAIT_TIMEOUT} с)"):

@@ -7,19 +7,22 @@
 from __future__ import annotations
 
 from config.config import AppConfig
+from config.credentials import Credentials
 from src.driver.driver_wrapper import DriverWrapper
 from src.pages.call_detail_page import CallDetailPage
 from src.pages.calls_page import CallsPage
 from src.pages.contacts_page import ContactsPage
 from src.pages.dialer_page import DialerPage
+from src.pages.login_page import LoginPage
 from src.pages.page_context import PageContext
 from src.pages.profile_page import ProfilePage
 from src.pages.search_page import SearchPage
 
 
 class Pages:
-    def __init__(self, driver: DriverWrapper, config: AppConfig):
-        self.ctx = PageContext(driver=driver, config=config)
+    def __init__(self, driver: DriverWrapper, config: AppConfig,
+                 credentials: Credentials | None = None):
+        self.ctx = PageContext(driver=driver, config=config, credentials=credentials)
         self._build_pages()
 
     def _build_pages(self) -> None:
@@ -30,6 +33,7 @@ class Pages:
         self.search = SearchPage(ctx)
         self.dialer = DialerPage(ctx)
         self.call_detail = CallDetailPage(ctx)
+        self.login = LoginPage(ctx)
 
     @property
     def common(self):

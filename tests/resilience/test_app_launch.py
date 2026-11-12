@@ -73,7 +73,7 @@ class TestAppLaunch:
         """Запустить приложение -> процесс приложения жив."""
         raw = driver.raw
         # Пакет берём из capabilities сессии — Appium определил его из APK
-        # (тот же источник, что у _restart_app_per_test в fixtures/driver_fixtures.py).
+        # (тот же источник, что в fixture driver в fixtures/driver_fixtures.py).
         package = raw.capabilities.get("appPackage")
 
         with allure.step("Проверить, что Appium-сессия активна"):

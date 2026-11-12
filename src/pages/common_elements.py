@@ -128,3 +128,25 @@ class CommonElements:
         """Баннер входа виден только неавторизованному пользователю."""
         self.driver.tap(UnauthorizedStateLocators.LOGIN_BANNER_BUTTON,
                         timeout=self.ctx.timeout)
+
+    @allure.step("Открыть экран входа MTS ID")
+    def open_login_screen(self):
+        """Сквозной переход к экрану входа: вкладка «Профиль» → кнопка входа.
+
+        Кнопка входа есть на неавторизованном экране профиля (и в баннере
+        вкладки «Звонки») — после тапа открывается bottom sheet с WebView
+        SSO-флоу MTS ID. Возвращает LoginPage для работы с экранами входа.
+
+        SSO-экран может быть уже открыт (например, после выхода из профиля
+        приложение само показывает форму входа) — тогда тапы пропускаются.
+        """
+        from src.pages.login_page import LoginPage, LoginPageLocators
+
+        login_page = LoginPage(self.ctx)
+        if login_page.driver.is_present(LoginPageLocators.SCREEN_ROOT,
+                                        timeout=2):
+            return login_page
+
+        self.open_profile_tab()
+        self.tap_login_banner()
+        return login_page
