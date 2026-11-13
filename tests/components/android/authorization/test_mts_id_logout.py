@@ -32,6 +32,10 @@ import allure
 import pytest
 
 from src.pages.login_page import LoginPageLocators
+from tests.constants import (
+    NEGATIVE_PROBE_TIMEOUT,
+    PAGE_LOAD_TIMEOUT,
+)
 
 
 @allure.epic("Авторизация")
@@ -74,16 +78,16 @@ class TestMtsIdLogout:
 
         with allure.step("Проверить, что карточка пользователя исчезла"):
             # Аватар виден только у авторизованного пользователя: после
-            # выхода он обязан пропасть (даём 2с на перерисовку)
+            # выхода он обязан пропасть (даём мгновение на перерисовку)
             assert not driver.is_present(LoginPageLocators.MTS_ID_AVATAR,
-                                         timeout=2), (
+                                         timeout=NEGATIVE_PROBE_TIMEOUT), (
                 "Карточка пользователя осталась после выхода")
 
         with allure.step("Проверить, что приложение показало форму входа MTS ID"):
             # Штатное поведение: после логаута открывается полноэкранная
             # SSO-форма («Рады видеть вас снова») — повторный вход требуется
             # без перезапуска приложения
-            assert driver.is_present(LoginPageLocators.SCREEN_ROOT, timeout=15), (
+            assert driver.is_present(LoginPageLocators.SCREEN_ROOT, timeout=PAGE_LOAD_TIMEOUT), (
                 "Форма входа MTS ID не открылась после выхода")
 
     @allure.title("Отмена выхода в диалоге -> пользователь остаётся авторизованным")

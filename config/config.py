@@ -33,6 +33,9 @@ class AppConfig(BaseModel):
     no_reset: bool = True
     full_reset: bool = False
     new_command_timeout: int = 300
+    # Базовый таймаут ожиданий page objects, c (PageContext.timeout):
+    # WebDriverWait в страницах, локальные заглушки в тестах.
+    default_timeout: int = 10
     # Предотвращать системные permission-диалоги: Appium сам выдаёт все
     # RUNTIME-разрешения (Android — pm grant при установке APK + прямой грант
     # в фикстуре; iOS — autoAcceptAlerts: WDA тапает «Разрешить»/Allow на

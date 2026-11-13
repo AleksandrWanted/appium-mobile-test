@@ -13,10 +13,10 @@ import time
 import allure
 import pytest
 
+from tests.constants import SPLASH_POLL_INTERVAL, SPLASH_WAIT_TIMEOUT
+
 # Splash-активность приложения: сплэш пройден, когда в фокусе уже другая активность.
 SPLASH_ACTIVITY = "SplashActivity"
-SPLASH_WAIT_TIMEOUT = 10  # сколько секунд ждать прохождения сплэша
-SPLASH_POLL_INTERVAL = 1
 
 # Состояния queryAppState, при которых приложение считается запущенным.
 RUNNING_STATES = {2, 3, 4}

@@ -10,6 +10,8 @@ from src.pages.common_elements import CommonElements
 
 # Базовый таймаут ожиданий, в секундах. Вынесен в контекст, чтобы page objects
 # работали с одним таймаутом; отдельные шаги могут переопределять его точечно.
+# Значение берётся из конфига (default_timeout), константа — fallback, когда
+# ctx строится без конфига.
 DEFAULT_TIMEOUT_S = 10
 
 
@@ -26,7 +28,7 @@ class PageContext:
         self.driver = driver
         self.config = config
         self.credentials = credentials
-        self.timeout = DEFAULT_TIMEOUT_S
+        self.timeout = getattr(config, "default_timeout", DEFAULT_TIMEOUT_S)
         self.logger = logging.getLogger("src.pages.context")
         self.common = CommonElements(self)
 

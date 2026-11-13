@@ -23,9 +23,13 @@ import allure
 import pytest
 
 # Хелперы из дымового теста запуска: общий алгоритм прохождения сплэша.
+from tests.constants import (
+    FOREGROUND_POLL_INTERVAL,
+    FOREGROUND_WAIT_TIMEOUT,
+)
 from tests.resilience.test_app_launch import (
-    SPLASH_WAIT_TIMEOUT,
     RUNNING_STATES,
+    SPLASH_WAIT_TIMEOUT,
     _wait_splash_passed,
 )
 
@@ -37,10 +41,6 @@ FOREGROUND_STATE = 4
 # Сколько секунд подождать после сворачивания перед проверкой процесса:
 # если бы система прибила приложение при уходе в фон, это произошло бы быстро.
 BACKGROUND_SETTLE_S = 3
-
-# Сколько секунд ждать, пока приложение вернётся в foreground после разворачивания.
-FOREGROUND_WAIT_TIMEOUT = 10
-FOREGROUND_POLL_INTERVAL = 1
 
 
 @allure.epic("Проверка стабильности")

@@ -39,6 +39,10 @@ import pytest
 from src.pages.calls_page import CallsPageLocators
 from src.pages.contacts_page import ContactsPageLocators
 from src.pages.login_page import LoginPageLocators
+from tests.constants import (
+    NEGATIVE_PROBE_TIMEOUT,
+    PAGE_LOAD_TIMEOUT,
+)
 
 
 @allure.epic("Авторизация")
@@ -133,7 +137,7 @@ class TestMtsIdLogin:
 
         with allure.step("Проверить карточку пользователя отсутствует до входа"):
             assert not profile.driver.is_present(
-                LoginPageLocators.MTS_ID_AVATAR, timeout=2), (
+                LoginPageLocators.MTS_ID_AVATAR, timeout=NEGATIVE_PROBE_TIMEOUT), (
                 "Карточка пользователя видна до входа — состояние не чистое")
 
         with allure.step("Дождаться открытия и загрузки SSO-формы MTS ID"):
@@ -146,7 +150,7 @@ class TestMtsIdLogin:
 
         with allure.step("Проверить, что окно входа MTS ID закрылось"):
             assert not profile.driver.is_present(
-                LoginPageLocators.SCREEN_ROOT, timeout=3), (
+                LoginPageLocators.SCREEN_ROOT, timeout=NEGATIVE_PROBE_TIMEOUT), (
                 "SSO-окно MTS ID осталось на экране после свайпа вниз")
 
         with allure.step("Проверить, что пользователь не авторизован"):
@@ -154,7 +158,7 @@ class TestMtsIdLogin:
                 "Кнопка входа «ВОЙТИ В МТС OPTIMUS» не видна — вход был "
                 "выполнен или экран не вернулся на «Профиль»")
             assert not profile.driver.is_present(
-                LoginPageLocators.MTS_ID_AVATAR, timeout=2), (
+                LoginPageLocators.MTS_ID_AVATAR, timeout=NEGATIVE_PROBE_TIMEOUT), (
                 "Карточка пользователя видна — вход выполнен вопреки отмене")
 
     @allure.title("Вход через баннер на вкладке «Звонки» -> окно закрылось, звонки доступны")
@@ -184,7 +188,7 @@ class TestMtsIdLogin:
 
         with allure.step("Проверить баннер «Войти в МТС Optimus» на вкладке «Звонки»"):
             banner = pages.common.unauthorized_state.LOGIN_BANNER_BUTTON
-            assert pages.ctx.driver.is_present(banner, timeout=3), (
+            assert pages.ctx.driver.is_present(banner, timeout=PAGE_LOAD_TIMEOUT), (
                 "Баннер входа «Войти в МТС Optimus» не виден на вкладке «Звонки»")
 
         with allure.step("Нажать баннер «Войти в МТС Optimus»"):
@@ -223,17 +227,17 @@ class TestMtsIdLogin:
             # вкладку (промежуточное состояние: хвост sheet'а, контента нет) —
             # тап по меню в этот момент бесполезен, ждём рендер контента.
             assert pages.ctx.driver.is_present(
-                CallsPageLocators.SCREEN_ROOT, timeout=15), (
+                CallsPageLocators.SCREEN_ROOT, timeout=PAGE_LOAD_TIMEOUT), (
                 "Вкладка «Звонки» не вернулась после входа")
 
         with allure.step("Проверить вкладку «Звонки» после входа"):
             assert calls.is_loaded(), (
                 "Заголовок «Звонки» не виден после входа")
             assert pages.ctx.driver.is_present(
-                CallsPageLocators.SEARCH_BUTTON, timeout=5), (
+                CallsPageLocators.SEARCH_BUTTON, timeout=PAGE_LOAD_TIMEOUT), (
                 "Кнопка поиска по звонкам не видна на вкладке «Звонки»")
             banner = pages.common.unauthorized_state.LOGIN_BANNER_BUTTON
-            assert not pages.ctx.driver.is_present(banner, timeout=2), (
+            assert not pages.ctx.driver.is_present(banner, timeout=NEGATIVE_PROBE_TIMEOUT), (
                 "Баннер входа «Войти в МТС Optimus» остался — вход не применён")
 
     @allure.title("Вход через баннер на вкладке «Контакты» -> окно закрылось, контакты доступны")
@@ -262,7 +266,7 @@ class TestMtsIdLogin:
 
         with allure.step("Проверить баннер «Войти в МТС Optimus» на вкладке «Контакты»"):
             banner = pages.common.unauthorized_state.LOGIN_BANNER_BUTTON
-            assert pages.ctx.driver.is_present(banner, timeout=3), (
+            assert pages.ctx.driver.is_present(banner, timeout=PAGE_LOAD_TIMEOUT), (
                 "Баннер входа «Войти в МТС Optimus» не виден на вкладке «Контакты»")
 
         with allure.step("Нажать баннер «Войти в МТС Optimus»"):
@@ -301,15 +305,15 @@ class TestMtsIdLogin:
             # 1–2 секунды дорисовывает вкладку (хвост sheet'а, контента
             # нет) — тап по меню бесполезен, ждём рендер контента.
             assert pages.ctx.driver.is_present(
-                ContactsPageLocators.SCREEN_ROOT, timeout=15), (
+                ContactsPageLocators.SCREEN_ROOT, timeout=PAGE_LOAD_TIMEOUT), (
                 "Вкладка «Контакты» не вернулась после входа")
 
         with allure.step("Проверить вкладку «Контакты» после входа"):
             assert contacts.is_loaded(), (
                 "Заголовок «Контакты» не виден после входа")
             assert pages.ctx.driver.is_present(
-                ContactsPageLocators.CLIENT_LIST, timeout=5), (
+                ContactsPageLocators.CLIENT_LIST, timeout=PAGE_LOAD_TIMEOUT), (
                 "Список контактов не виден на вкладке «Контакты»")
             banner = pages.common.unauthorized_state.LOGIN_BANNER_BUTTON
-            assert not pages.ctx.driver.is_present(banner, timeout=2), (
+            assert not pages.ctx.driver.is_present(banner, timeout=NEGATIVE_PROBE_TIMEOUT), (
                 "Баннер входа «Войти в МТС Optimus» остался — вход не применён")

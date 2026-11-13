@@ -26,10 +26,11 @@ import pytest
 
 from src.pages.common_elements import BottomNavLocators
 from src.pages.profile_page import ProfilePageLocators
-
-# Запас на холодный старт после force-stop: приложение заново рисует
-# splash и стартовую вкладку (реальное устройство, Samsung S21 FE).
-_COLD_START_TIMEOUT = 30
+from tests.constants import (
+    COLD_START_TIMEOUT,
+    NEGATIVE_PROBE_TIMEOUT,
+    PAGE_LOAD_TIMEOUT,
+)
 
 # Константа mobile: queryAppState «не запущено» — enum ApplicationState
 # в используемой версии python-клиента не экспортируется.
@@ -87,16 +88,16 @@ class TestMtsIdSessionResilience:
             raw.activate_app(app_id)
             assert self._wait_app_started(pages), (
                 "Приложение не стартовало: нижнее меню не появилось "
-                f"за {_COLD_START_TIMEOUT} с")
+                f"за {COLD_START_TIMEOUT} с")
 
         with allure.step("Проверить, что сессия сохранена после перезапуска"):
             pages.common.open_profile_tab()
             assert pages.ctx.driver.is_present(
-                ProfilePageLocators.USER_AVATAR, timeout=20), (
+                ProfilePageLocators.USER_AVATAR, timeout=PAGE_LOAD_TIMEOUT), (
                 "Карточка пользователя не видна после повторного открытия — "
                 "сессия авторизации не сохранилась")
             banner = pages.common.unauthorized_state.LOGIN_BANNER_BUTTON
-            assert not pages.ctx.driver.is_present(banner, timeout=2), (
+            assert not pages.ctx.driver.is_present(banner, timeout=NEGATIVE_PROBE_TIMEOUT), (
                 "Баннер входа «Войти в МТС Optimus» виден после перезапуска — "
                 "пользователь разлогинен, повторный вход не выполнен")
 
@@ -107,7 +108,7 @@ class TestMtsIdSessionResilience:
         Стартовую вкладку после force-stop не фиксируем — критерий
         готовности: появление нижнего навигационного меню (любой вкладки).
         """
-        deadline = time.monotonic() + _COLD_START_TIMEOUT
+        deadline = time.monotonic() + COLD_START_TIMEOUT
         while time.monotonic() < deadline:
             for locator in (BottomNavLocators.TAB_CALLS,
                             BottomNavLocators.TAB_CONTACTS,
