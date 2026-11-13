@@ -129,6 +129,25 @@ class LoginPage(BasePage):
     def is_login_with_other_number_visible(self) -> bool:
         return self.is_displayed(LoginPageLocators.LOGIN_WITH_OTHER_NUMBER)
 
+    @allure.step("Дойти до экрана ввода номера (fast-track опционален)")
+    def open_phone_input_screen(self) -> None:
+        """Приводит форму к экрану ввода номера телефона.
+
+        Первый экран флоу зависит от состояния SDK: «Рады видеть вас снова»
+        (fast-track, SDK помнит номер) или сразу «Войдите с номером телефона
+        любого оператора». Поведение менялось между сборками — fast-track
+        считаем опциональным: если он показан, уходим на экран ввода через
+        «Войти с другим номером» (сохранённый номер может отличаться от
+        тестового), иначе экран ввода уже открыт.
+        """
+        if self.is_welcome_back_screen():
+            self.tap_login_with_other_number()
+
+        if not self.is_phone_input_screen():
+            raise RuntimeError(
+                "Не открылся экран ввода номера: нет ни fast-track «Рады "
+                "видеть вас снова», ни «Войдите с номером телефона»")
+
     @allure.step("Нажать «Войти с другим номером»")
     def tap_login_with_other_number(self) -> None:
         self.tap(LoginPageLocators.LOGIN_WITH_OTHER_NUMBER)
@@ -236,27 +255,22 @@ class LoginPage(BasePage):
                 "Bottom sheet MTS ID не закрылся свайпом вниз — вход не отменён")
 
     # --- сквозной сценарий ---
-    @allure.step("Авторизоваться по номеру {msisdn} и коду из СМС")
-    def login_with_credentials(self, msisdn: str, code: str) -> None:
-        """Сквозной вход: fast-track (если показан) → номер → OTP → готово.
+    @allure.step("Пройти флоу входа: номер телефона {msisdn} и код из СМС")
+    def pass_login_flow(self, msisdn: str, code: str) -> None:
+        """Флоу входа через уже открытую форму: fast-track → номер → OTP.
 
-        Fast-track «Рады видеть вас снова» появляется, когда SDK уже сохранял
-        номер: сохранённый номер может отличаться от тестового, поэтому всегда
-        уходим на экран ввода через «Войти с другим номером».
+        Без ожиданий открытия/загрузки (ждите wait_opened/wait_form_loaded
+        до вызова) и без проверки финального успеха. Это позволяет запускать
+        вход с любой вкладки: SSO закрывается само, а приложение остаётся
+        там, откуда вход был начат (не на вкладке «Профиль»), — признак
+        успеха проверяет вызывающий код (wait_login_completed либо
+        собственные проверки авторизованного состояния).
+
+        Fast-track «Рады видеть вас снова» появляется, когда SDK уже
+        сохранял номер: сохранённый номер может отличаться от тестового,
+        поэтому уходим на экран ввода через «Войти с другим номером».
         """
-        if not self.wait_opened():
-            raise RuntimeError(
-                "Экран входа MTS ID не открылся: WebView SSO (sdkSsoWebLoginForm) "
-                "не найден в разметке")
-        self.wait_form_loaded()
-
-        # Fast-track может показывать чужой сохранённый номер — всегда «Войти
-        # с другим номером», чтобы ввести MSISDN из credentials явно.
-        if self.is_welcome_back_screen():
-            self.tap_login_with_other_number()
-            if not self.is_phone_input_screen():
-                raise RuntimeError(
-                    "После «Войти с другим номером» не открылся экран ввода номера")
+        self.open_phone_input_screen()
 
         self.type_phone(msisdn)
         self.submit_phone()
@@ -265,6 +279,25 @@ class LoginPage(BasePage):
             raise RuntimeError(
                 "После «ДАЛЕЕ» не открылся экран «Введите код из СМС»")
         self.type_otp(code)
+
+    @allure.step("Авторизоваться по номеру {msisdn} и коду из СМС")
+    def login_with_credentials(self, msisdn: str, code: str) -> None:
+        """Сквозной вход: открыть форму → флоу (pass_login_flow) → готово.
+
+        Признак успеха — аватар на вкладке «Профиль»: вход с этой заготовки
+        всегда завершается на вкладке «Профиль» (кнопка входа неавторизован-
+        ного экрана профиля). Для входа, запущенного с другой вкладки
+        (баннер «Звонков», точки входа диктофона), вызывайте
+        pass_login_flow напрямую — приложение после входа остаётся на
+        исходной вкладке.
+        """
+        if not self.wait_opened():
+            raise RuntimeError(
+                "Экран входа MTS ID не открылся: WebView SSO (sdkSsoWebLoginForm) "
+                "не найден в разметке")
+        self.wait_form_loaded()
+
+        self.pass_login_flow(msisdn, code)
 
         if not self.wait_login_completed():
             raise RuntimeError(

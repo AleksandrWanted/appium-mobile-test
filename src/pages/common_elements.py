@@ -35,11 +35,13 @@ class BottomNavLocators:
     """Локаторы нижнего навигационного меню приложения (общие для всех вкладок).
 
     Меню — нативные View'ы с resource-id: каждая вкладка — FrameLayout
-    с уникальным id (callsFlowFragment / membersFlowFragment / profileFlowFragment).
+    с уникальным id (callsFlowFragment / membersFlowFragment /
+    voiceRecorderFlowFragment / profileFlowFragment).
     """
 
     TAB_CALLS = (AppiumBy.ID, "ru.mts.mvats:id/callsFlowFragment")
     TAB_CONTACTS = (AppiumBy.ID, "ru.mts.mvats:id/membersFlowFragment")
+    TAB_VOICE_RECORDER = (AppiumBy.ID, "ru.mts.mvats:id/voiceRecorderFlowFragment")
     TAB_PROFILE = (AppiumBy.ID, "ru.mts.mvats:id/profileFlowFragment")
 
 
@@ -113,6 +115,14 @@ class CommonElements:
         self.logger.info("Открываем вкладку «Контакты»")
         self.driver.tap(BottomNavLocators.TAB_CONTACTS, timeout=self.ctx.timeout)
         return ContactsPage(self.ctx)
+
+    @allure.step("Открыть вкладку «ИИ-диктофон»")
+    def open_voice_recorder_tab(self):
+        from src.pages.voice_recorder_page import VoiceRecorderPage
+
+        self.logger.info("Открываем вкладку «ИИ-диктофон»")
+        self.driver.tap(BottomNavLocators.TAB_VOICE_RECORDER, timeout=self.ctx.timeout)
+        return VoiceRecorderPage(self.ctx)
 
     @allure.step("Открыть вкладку «Профиль»")
     def open_profile_tab(self):

@@ -17,6 +17,8 @@ from src.pages.login_page import LoginPage
 from src.pages.page_context import PageContext
 from src.pages.profile_page import ProfilePage
 from src.pages.search_page import SearchPage
+from src.pages.voice_record_detail_page import VoiceRecordDetailPage
+from src.pages.voice_recorder_page import VoiceRecorderPage
 
 
 class Pages:
@@ -33,6 +35,8 @@ class Pages:
         self.search = SearchPage(ctx)
         self.dialer = DialerPage(ctx)
         self.call_detail = CallDetailPage(ctx)
+        self.voice_recorder = VoiceRecorderPage(ctx)
+        self.voice_record_detail = VoiceRecordDetailPage(ctx)
         self.login = LoginPage(ctx)
 
     @property
